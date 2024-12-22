@@ -1,13 +1,17 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import { UserNav } from '@/app/components/UserNav';
-import { ReviewList } from '@/app/components/ReviewCard';
-import { UserRole, Review } from '@/app/types';
+import { prisma } from 'lib/db';
+import { UserNav } from 'app/components/UserNav';
+import { ReviewList } from 'app/components/ReviewCard';
+import { UserRole, Review, User } from 'app/types';
 
 interface EngineerReviewsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
+}
+
+interface EngineerWithReviews extends User {
+  receivedReviews: Review[];
 }
 
 async function getEngineerReviews(id: string) {
@@ -23,7 +27,19 @@ async function getEngineerReviews(id: string) {
           reviewer: true,
           contract: {
             include: {
-              project: true,
+              project: {
+                include: {
+                  user: true
+                }
+              },
+              proposal: {
+                include: {
+                  engineer: true,
+                  project: true
+                }
+              },
+              messages: true,
+              reviews: true
             },
           },
         },
@@ -35,7 +51,52 @@ async function getEngineerReviews(id: string) {
     notFound();
   }
 
-  return engineer;
+  // Prismaの戻り値を適切な型に変換
+  const formattedEngineer: EngineerWithReviews = {
+    id: engineer.id,
+    email: engineer.email,
+    role: engineer.role,
+    status: engineer.status,
+    displayName: engineer.displayName,
+    profileImageUrl: engineer.profileImageUrl,
+    bio: engineer.bio,
+    companyName: engineer.companyName,
+    companySize: engineer.companySize,
+    industry: engineer.industry,
+    location: engineer.location,
+    skills: engineer.skills,
+    experienceYears: engineer.experienceYears,
+    portfolioUrl: engineer.portfolioUrl,
+    isProfilePublic: engineer.isProfilePublic,
+    emailVerifiedAt: engineer.emailVerifiedAt,
+    createdAt: engineer.createdAt,
+    updatedAt: engineer.updatedAt,
+    receivedReviews: engineer.receivedReviews.map(review => ({
+      ...review,
+      contract: {
+        ...review.contract,
+        project: {
+          ...review.contract.project,
+          user: review.contract.project.user,
+          proposals: []
+        },
+        proposal: {
+          ...review.contract.proposal,
+          project: {
+            ...review.contract.proposal.project,
+            user: review.contract.project.user,
+            proposals: []
+          },
+          engineer: review.contract.proposal.engineer,
+          messages: []
+        },
+        messages: [],
+        reviews: []
+      }
+    }))
+  };
+
+  return formattedEngineer;
 }
 
 interface SkillRating {
@@ -46,18 +107,19 @@ interface SkillRating {
 }
 
 export default async function EngineerReviewsPage({ params }: EngineerReviewsPageProps) {
-  const engineer = await getEngineerReviews(params.id);
+  const { id } = await params;
+  const engineer = await getEngineerReviews(id);
 
   // レビューの統計情報を計算
   const totalReviews = engineer.receivedReviews.length;
   const averageRating = totalReviews > 0
-    ? engineer.receivedReviews.reduce((sum: number, review: Review) => sum + review.rating, 0) / totalReviews
+    ? engineer.receivedReviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
     : 0;
 
   // レーティング分布を計算
   const ratingDistribution = [5, 4, 3, 2, 1].map(rating => {
     const reviewsWithRating = engineer.receivedReviews.filter(
-      (review: Review) => review.rating === rating
+      review => review.rating === rating
     );
     const count = reviewsWithRating.length;
     const percentage = totalReviews > 0
@@ -75,10 +137,10 @@ export default async function EngineerReviewsPage({ params }: EngineerReviewsPag
   const skillRatings: SkillRating[] = engineer.skills
     ? Object.entries(engineer.skills as Record<string, number>).map(([skill]) => {
         const skillReviews = engineer.receivedReviews.filter(
-          (review: Review) => review.contract.project.title.toLowerCase().includes(skill.toLowerCase())
+          review => review.contract.project.title.toLowerCase().includes(skill.toLowerCase())
         );
         const avgRating = skillReviews.length > 0
-          ? skillReviews.reduce((sum: number, review: Review) => sum + review.rating, 0) / skillReviews.length
+          ? skillReviews.reduce((sum, review) => sum + review.rating, 0) / skillReviews.length
           : 0;
         return {
           skill,

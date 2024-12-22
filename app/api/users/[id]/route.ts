@@ -1,13 +1,20 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '../../../../lib/db';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from 'lib/db';
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
   try {
+    const { id } = await context.params;
     const user = await prisma.user.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         projects: {
           where: { status: { not: 'DRAFT' } },

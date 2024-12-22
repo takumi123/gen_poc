@@ -1,9 +1,14 @@
 import { Project } from './types'
 import Link from 'next/link'
 import { ProjectList } from './components/ProjectList'
+import { headers } from 'next/headers'
 
 async function getProjects(): Promise<Project[]> {
-  const res = await fetch('http://localhost:3000/api/projects', {
+  const headersList = await headers()
+  const host = headersList.get('host')
+  const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https'
+
+  const res = await fetch(`${protocol}://${host}/api/projects`, {
     cache: 'no-store',
   })
   if (!res.ok) {

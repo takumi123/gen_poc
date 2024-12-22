@@ -1,149 +1,83 @@
-'use client'
+'use client';
 
-import { Proposal, ProposalStatus } from '../types'
-import { formatDistanceToNow } from 'date-fns'
-import { ja } from 'date-fns/locale'
+import dynamic from 'next/dynamic';
+import { User, Proposal, ProposalStatus } from '../types';
+
+const MDPreview = dynamic(
+  () => import('@uiw/react-markdown-preview').then((mod) => mod.default),
+  { ssr: false }
+);
 
 interface ProposalListProps {
-  proposals: Proposal[]
-  isProjectOwner: boolean
-  onAccept?: (proposalId: string) => Promise<void>
-  onReject?: (proposalId: string) => Promise<void>
+  proposals: (Proposal & {
+    engineer: User;
+  })[];
+  isProjectOwner?: boolean;
+  onAccept?: (proposalId: string) => Promise<void>;
+  onReject?: (proposalId: string) => Promise<void>;
 }
 
-export function ProposalList({
-  proposals,
-  isProjectOwner,
-  onAccept,
-  onReject,
-}: ProposalListProps) {
-  const statusColors = {
-    [ProposalStatus.DRAFT]: 'bg-gray-100 text-gray-800',
-    [ProposalStatus.SUBMITTED]: 'bg-yellow-100 text-yellow-800',
-    [ProposalStatus.ACCEPTED]: 'bg-green-100 text-green-800',
-    [ProposalStatus.REJECTED]: 'bg-red-100 text-red-800',
-    [ProposalStatus.WITHDRAWN]: 'bg-gray-100 text-gray-800',
-  }
-
-  const statusText = {
-    [ProposalStatus.DRAFT]: '下書き',
-    [ProposalStatus.SUBMITTED]: '提案中',
-    [ProposalStatus.ACCEPTED]: '承認済み',
-    [ProposalStatus.REJECTED]: '却下',
-    [ProposalStatus.WITHDRAWN]: '取り下げ',
+export function ProposalList({ proposals, isProjectOwner, onAccept, onReject }: ProposalListProps) {
+  if (proposals.length === 0) {
+    return null;
   }
 
   return (
     <div className="mt-8">
-      <h2 className="text-lg font-medium text-gray-900">提案一覧</h2>
-      <div className="mt-4 space-y-6">
+      <h2 className="text-2xl font-bold mb-4">提案一覧</h2>
+      <div className="space-y-4">
         {proposals.map((proposal) => (
           <div
             key={proposal.id}
-            className="bg-white shadow rounded-lg p-6 border border-gray-200"
+            className="bg-white shadow rounded-lg p-6"
           >
             <div className="flex justify-between items-start">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  {proposal.engineer.profileImageUrl ? (
-                    <img
-                      className="h-10 w-10 rounded-full"
-                      src={proposal.engineer.profileImageUrl}
-                      alt={proposal.engineer.displayName}
-                    />
-                  ) : (
-                    <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                      <span className="text-gray-500 text-sm">
-                        {proposal.engineer.displayName.charAt(0)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">
-                    {proposal.engineer.displayName}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {formatDistanceToNow(new Date(proposal.createdAt), {
-                      addSuffix: true,
-                      locale: ja,
-                    })}
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {proposal.engineer.displayName}
+                </p>
+                <p className="mt-1 text-sm text-gray-500">
+                  提案日: {new Date(proposal.createdAt).toLocaleDateString()}
+                </p>
               </div>
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  statusColors[proposal.status]
+                className={`px-2 py-1 text-xs font-medium rounded ${
+                  proposal.status === ProposalStatus.SUBMITTED
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : proposal.status === ProposalStatus.ACCEPTED
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
                 }`}
               >
-                {statusText[proposal.status]}
+                {proposal.status === ProposalStatus.SUBMITTED
+                  ? '検討中'
+                  : proposal.status === ProposalStatus.ACCEPTED
+                  ? '承認済み'
+                  : '却下'}
               </span>
             </div>
-
-            <div className="mt-4">
-              <p className="text-gray-700">{proposal.proposalText}</p>
-              <p className="mt-2 text-gray-700">{proposal.approachDescription}</p>
-            </div>
-
-            <div className="mt-4 flex justify-between items-center">
-              <div>
-                <p className="text-sm text-gray-500">提案予算</p>
-                <p className="text-lg font-medium text-gray-900">
-                  ¥{proposal.proposedBudget.toLocaleString()}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">想定期間</p>
-                <p className="text-lg font-medium text-gray-900">
-                  {proposal.proposedTimeline}
-                </p>
-              </div>
-            </div>
-
-            {proposal.attachments && Object.keys(proposal.attachments).length > 0 && (
-              <div className="mt-4">
-                <p className="text-sm text-gray-500 mb-2">添付資料</p>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(proposal.attachments).map(([name, url]) => (
-                    <a
-                      key={name}
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center px-3 py-1 rounded-md bg-gray-100 text-sm text-gray-700 hover:bg-gray-200"
-                    >
-                      {name}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {isProjectOwner && proposal.status === ProposalStatus.SUBMITTED && (
-              <div className="mt-6 flex justify-end space-x-4">
-                <button
-                  onClick={() => onReject?.(proposal.id)}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  却下
-                </button>
+              <div className="mt-4 flex space-x-4">
                 <button
                   onClick={() => onAccept?.(proposal.id)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
                 >
-                  承認
+                  承認する
+                </button>
+                <button
+                  onClick={() => onReject?.(proposal.id)}
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                >
+                  却下する
                 </button>
               </div>
             )}
+            <div className="mt-4 prose max-w-none" data-color-mode="light">
+              <MDPreview source={proposal.proposalText} />
+            </div>
           </div>
         ))}
-
-        {proposals.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-            <p className="text-sm text-gray-500">まだ提案がありません</p>
-          </div>
-        )}
       </div>
     </div>
-  )
+  );
 }

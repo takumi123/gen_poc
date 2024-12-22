@@ -1,16 +1,20 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import { ReviewForm } from '@/app/components/ReviewForm';
-import { ContractStatus } from '@/app/types';
+import { prisma } from 'lib/db';
+import { ReviewForm } from 'app/components/ReviewForm';
+import { ContractStatus, Contract, Project, Proposal, Review as AppReview } from 'app/types';
 import { submitReview } from './actions';
 
 interface ReviewPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-async function getContract(id: string) {
+type ContractWithRelations = Contract & {
+  reviews: AppReview[];
+};
+
+async function getContract(id: string): Promise<ContractWithRelations> {
   const contract = await prisma.contract.findUnique({
     where: {
       id,
@@ -27,7 +31,11 @@ async function getContract(id: string) {
           engineer: true,
         },
       },
-      reviews: true,
+      reviews: {
+        include: {
+          reviewer: true,
+        },
+      },
     },
   });
 
@@ -35,13 +43,53 @@ async function getContract(id: string) {
     notFound();
   }
 
-  return contract;
+  const formattedProject: Project = {
+    ...contract.project,
+    user: contract.project.user,
+    proposals: []
+  };
+
+  const formattedProposal: Proposal = {
+    ...contract.proposal,
+    project: formattedProject,
+    engineer: contract.proposal.engineer,
+    messages: []
+  };
+
+  const formattedContract: ContractWithRelations = {
+    id: contract.id,
+    projectId: contract.projectId,
+    proposalId: contract.proposalId,
+    contractAmount: contract.contractAmount,
+    startDate: contract.startDate,
+    endDate: contract.endDate,
+    deliverables: contract.deliverables,
+    status: contract.status,
+    createdAt: contract.createdAt,
+    updatedAt: contract.updatedAt,
+    project: formattedProject,
+    proposal: formattedProposal,
+    messages: [],
+    reviews: contract.reviews.map(review => ({
+      ...review,
+      contract: {
+        ...contract,
+        project: formattedProject,
+        proposal: formattedProposal,
+        messages: [],
+        reviews: []
+      },
+      reviewer: review.reviewer
+    }))
+  };
+
+  return formattedContract;
 }
 
 export default async function ReviewPage({ params }: ReviewPageProps) {
-  const contract = await getContract(params.id);
+  const { id } = await params;
+  const contract = await getContract(id);
 
-  // すでにレビューが投稿されている場合は404を返す
   if (contract.reviews.length > 0) {
     notFound();
   }

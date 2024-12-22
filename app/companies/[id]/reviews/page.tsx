@@ -1,13 +1,13 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import { UserNav } from '@/app/components/UserNav';
-import { ReviewList } from '@/app/components/ReviewCard';
-import { UserRole, Review } from '@/app/types';
+import { prisma } from 'lib/db';
+import { UserNav } from 'app/components/UserNav';
+import { ReviewList } from 'app/components/ReviewCard';
+import { UserRole, Review } from 'app/types';
 
 interface CompanyReviewsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 async function getCompanyReviews(id: string) {
@@ -24,6 +24,12 @@ async function getCompanyReviews(id: string) {
           contract: {
             include: {
               project: true,
+              proposal: {
+                include: {
+                  project: true,
+                  engineer: true
+                }
+              }
             },
           },
         },
@@ -39,19 +45,19 @@ async function getCompanyReviews(id: string) {
 }
 
 export default async function CompanyReviewsPage({ params }: CompanyReviewsPageProps) {
-  const company = await getCompanyReviews(params.id);
+  const { id } = await params;
+  const company = await getCompanyReviews(id);
+  const reviews = company.receivedReviews as unknown as Review[];
 
   // レビューの統計情報を計算
-  const totalReviews = company.receivedReviews.length;
+  const totalReviews = reviews.length;
   const averageRating = totalReviews > 0
-    ? company.receivedReviews.reduce((sum: number, review: Review) => sum + review.rating, 0) / totalReviews
+    ? reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
     : 0;
 
   // レーティング分布を計算
   const ratingDistribution = [5, 4, 3, 2, 1].map(rating => {
-    const reviewsWithRating = company.receivedReviews.filter(
-      (review: Review) => review.rating === rating
-    );
+    const reviewsWithRating = reviews.filter(review => review.rating === rating);
     const count = reviewsWithRating.length;
     const percentage = totalReviews > 0
       ? (count / totalReviews) * 100
@@ -112,7 +118,7 @@ export default async function CompanyReviewsPage({ params }: CompanyReviewsPageP
 
           {/* レビュー一覧 */}
           <ReviewList
-            reviews={company.receivedReviews}
+            reviews={reviews}
             showProject={true}
           />
         </div>

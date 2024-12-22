@@ -2,6 +2,7 @@ import { Project, ProjectStatus } from '../types'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface ProjectCardProps {
   project: Project
@@ -44,10 +45,12 @@ export function ProjectCard({ project }: ProjectCardProps) {
         <div className="flex items-center space-x-2">
           <div className="flex-shrink-0">
             {project.user.profileImageUrl ? (
-              <img
-                className="h-8 w-8 rounded-full"
+              <Image
+                className="rounded-full"
                 src={project.user.profileImageUrl}
                 alt={project.user.displayName}
+                width={32}
+                height={32}
               />
             ) : (
               <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">

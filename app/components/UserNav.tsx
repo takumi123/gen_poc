@@ -2,10 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, UserRole } from '../types';
+import { UserRole, UserStatus } from '../types';
+
+interface UserNavUser {
+  id: string;
+  role: UserRole;
+  email: string;
+  displayName: string;
+  profileImageUrl: string | null;
+  status: UserStatus;
+}
 
 interface UserNavProps {
-  user: User;
+  user: UserNavUser;
 }
 
 export function UserNav({ user }: UserNavProps) {

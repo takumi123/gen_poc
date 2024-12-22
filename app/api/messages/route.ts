@@ -1,105 +1,111 @@
-import { prisma } from '../../../lib/db'
 import { NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/db'
 
-// メッセージ一覧取得
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const contractId = searchParams.get('contractId')
-    const senderId = searchParams.get('senderId')
-
-    const where = {
-      ...(contractId && { contractId }),
-      ...(senderId && { senderId }),
-    }
-
-    const messages = await prisma.message.findMany({
-      where,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            profileImageUrl: true,
-          },
-        },
-        contract: {
-          select: {
-            id: true,
-            project: {
-              select: {
-                id: true,
-                title: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    })
-
-    return NextResponse.json(messages)
-  } catch (error) {
-    console.error('メッセージ一覧取得エラー:', error)
-    return NextResponse.json(
-      { error: 'メッセージ一覧の取得に失敗しました' },
-      { status: 500 }
-    )
-  }
-}
-
-// メッセージ送信
 export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { contractId, senderId, messageBody } = body
+  const session = await auth()
+  if (!session?.user?.id) {
+    return new NextResponse('認証が必要です', { status: 401 })
+  }
 
-    // バリデーション
-    if (!contractId || !senderId || !messageBody) {
-      return NextResponse.json(
-        { error: '必須項目が不足しています' },
-        { status: 400 }
-      )
-    }
+  try {
+    const { contractId, messageBody } = await request.json()
 
     // 契約の存在確認
     const contract = await prisma.contract.findUnique({
       where: { id: contractId },
+      include: {
+        project: true,
+        proposal: true,
+      },
     })
 
     if (!contract) {
-      return NextResponse.json(
-        { error: '指定された契約が存在しません' },
-        { status: 404 }
-      )
+      return new NextResponse('契約が見つかりません', { status: 404 })
     }
 
-    // メッセージの作成
+    // 権限チェック
+    const isAuthorized =
+      session.user.id === contract.project.userId ||
+      session.user.id === contract.proposal.engineerId
+
+    if (!isAuthorized) {
+      return new NextResponse('権限がありません', { status: 403 })
+    }
+
+    // メッセージ作成
     const message = await prisma.message.create({
       data: {
         contractId,
-        senderId,
+        senderId: session.user.id,
         messageBody,
+        isTemplate: false,
+        isPinned: false,
       },
       include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            profileImageUrl: true,
-          },
-        },
+        sender: true,
       },
     })
 
     return NextResponse.json(message)
   } catch (error) {
-    console.error('メッセージ送信エラー:', error)
-    return NextResponse.json(
-      { error: 'メッセージの送信に失敗しました' },
-      { status: 500 }
-    )
+    console.error('メッセージ作成エラー:', error)
+    return new NextResponse('内部サーバーエラー', { status: 500 })
+  }
+}
+
+export async function GET(request: Request) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return new NextResponse('認証が必要です', { status: 401 })
+  }
+
+  try {
+    const { searchParams } = new URL(request.url)
+    const contractId = searchParams.get('contractId')
+
+    if (!contractId) {
+      return new NextResponse('契約IDが必要です', { status: 400 })
+    }
+
+    // 契約の存在確認
+    const contract = await prisma.contract.findUnique({
+      where: { id: contractId },
+      include: {
+        project: true,
+        proposal: true,
+      },
+    })
+
+    if (!contract) {
+      return new NextResponse('契約が見つかりません', { status: 404 })
+    }
+
+    // 権限チェック
+    const isAuthorized =
+      session.user.id === contract.project.userId ||
+      session.user.id === contract.proposal.engineerId
+
+    if (!isAuthorized) {
+      return new NextResponse('権限がありません', { status: 403 })
+    }
+
+    // メッセージ取得
+    const messages = await prisma.message.findMany({
+      where: {
+        contractId,
+      },
+      include: {
+        sender: true,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    })
+
+    return NextResponse.json(messages)
+  } catch (error) {
+    console.error('メッセージ取得エラー:', error)
+    return new NextResponse('内部サーバーエラー', { status: 500 })
   }
 }

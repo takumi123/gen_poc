@@ -1,171 +1,29 @@
-export enum UserRole {
-  CLIENT = 'CLIENT',
+import { JsonValue } from '@prisma/client/runtime/library';
+import { UserRole as PrismaUserRole, UserStatus as PrismaUserStatus, ProjectStatus as PrismaProjectStatus, ProposalStatus as PrismaProposalStatus, ContractStatus as PrismaContractStatus, BadgeType as PrismaBadgeType } from '@prisma/client';
+
+export const UserRole = PrismaUserRole;
+export type UserRole = PrismaUserRole;
+
+export const UserStatus = PrismaUserStatus;
+export type UserStatus = PrismaUserStatus;
+
+export const ProjectStatus = PrismaProjectStatus;
+export type ProjectStatus = PrismaProjectStatus;
+
+export const ProposalStatus = PrismaProposalStatus;
+export type ProposalStatus = PrismaProposalStatus;
+
+export const ContractStatus = PrismaContractStatus;
+export type ContractStatus = PrismaContractStatus;
+
+export const BadgeType = PrismaBadgeType;
+export type BadgeType = PrismaBadgeType;
+
+export enum SearchType {
+  PROJECT = 'PROJECT',
+  COMPANY = 'COMPANY',
   ENGINEER = 'ENGINEER',
-  ADMIN = 'ADMIN'
-}
-
-export enum UserStatus {
-  ACTIVE = 'ACTIVE',
-  PENDING = 'PENDING',
-  SUSPENDED = 'SUSPENDED'
-}
-
-export interface User {
-  id: string;
-  email: string;
-  role: UserRole;
-  status: UserStatus;
-  displayName: string;
-  profileImageUrl?: string | null;
-  bio?: string | null;
-  
-  // 企業向けフィールド
-  companyName?: string | null;
-  companySize?: number | null;
-  industry?: string | null;
-  location?: string | null;
-  
-  // エンジニア向けフィールド
-  skills?: Record<string, number> | null;
-  experienceYears?: number | null;
-  portfolioUrl?: string | null;
-  
-  // プロフィール設定
-  isProfilePublic: boolean;
-  emailVerifiedAt?: Date | null;
-  
-  createdAt: Date;
-  updatedAt: Date;
-
-  // Relations
-  projects?: Project[];
-  proposals?: Proposal[];
-  badges?: UserBadge[];
-  receivedReviews?: Review[];
-}
-
-export enum ProjectStatus {
-  DRAFT = 'DRAFT',
-  OPEN = 'OPEN',
-  IN_PROGRESS = 'IN_PROGRESS',
-  CLOSED = 'CLOSED',
-  CANCELLED = 'CANCELLED'
-}
-
-export interface Project {
-  id: string;
-  userId: string;
-  title: string;
-  description: string;
-  budget: number;
-  deadline?: Date;
-  requiredSkills?: Record<string, string>;
-  status: ProjectStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  user: User;
-  proposals?: Proposal[];
-}
-
-export enum ProposalStatus {
-  DRAFT = 'DRAFT',
-  SUBMITTED = 'SUBMITTED',
-  ACCEPTED = 'ACCEPTED',
-  REJECTED = 'REJECTED',
-  WITHDRAWN = 'WITHDRAWN'
-}
-
-export interface Proposal {
-  id: string;
-  projectId: string;
-  engineerId: string;
-  proposalText: string;
-  approachDescription: string;
-  proposedBudget: number;
-  proposedTimeline: string;
-  attachments?: Record<string, string>;
-  status: ProposalStatus;
-  rating?: number;
-  ratingComment?: string;
-  createdAt: Date;
-  updatedAt: Date;
-  project: Project;
-  engineer: User;
-}
-
-export enum ContractStatus {
-  ACTIVE = 'ACTIVE',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
-}
-
-export interface Contract {
-  id: string;
-  projectId: string;
-  proposalId: string;
-  contractAmount: number;
-  startDate: Date;
-  endDate: Date;
-  deliverables?: Record<string, string>;
-  status: ContractStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  project: Project;
-  proposal: Proposal;
-  messages?: Message[];
-  reviews?: Review[];
-}
-
-export interface Message {
-  id: string;
-  contractId: string;
-  senderId: string;
-  parentId?: string;
-  messageBody: string;
-  attachments?: Record<string, string>;
-  isTemplate: boolean;
-  isPinned: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  contract: Contract;
-  sender: User;
-  parent?: Message;
-  replies: Message[];
-}
-
-export interface MessageRead {
-  id: string;
-  messageId: string;
-  userId: string;
-  readAt: Date;
-  message: Message;
-  user: User;
-}
-
-export interface MessageReaction {
-  id: string;
-  messageId: string;
-  userId: string;
-  reaction: string;
-  createdAt: Date;
-  message: Message;
-  user: User;
-}
-
-export enum BadgeType {
-  FIRST_PROJECT = 'FIRST_PROJECT',
-  FIVE_PROJECTS = 'FIVE_PROJECTS',
-  TOP_RATED = 'TOP_RATED',
-  QUICK_RESPONSE = 'QUICK_RESPONSE',
-  EXPERT = 'EXPERT'
-}
-
-export interface UserBadge {
-  id: string;
-  userId: string;
-  badgeType: BadgeType;
-  awardedAt: Date;
-  user: User;
+  BLOG = 'BLOG'
 }
 
 export enum NotificationType {
@@ -175,21 +33,113 @@ export enum NotificationType {
   NEW_MESSAGE = 'NEW_MESSAGE',
   CONTRACT_COMPLETED = 'CONTRACT_COMPLETED',
   PAYMENT_RECEIVED = 'PAYMENT_RECEIVED',
-  REVIEW_RECEIVED = 'REVIEW_RECEIVED'
+  REVIEW_RECEIVED = 'REVIEW_RECEIVED',
+  BADGE_EARNED = 'BADGE_EARNED'
 }
 
-export interface Notification {
+export type User = {
+  id: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  displayName: string;
+  profileImageUrl: string | null;
+  bio: string | null;
+  
+  // 企業向けフィールド
+  companyName: string | null;
+  companySize: number | null;
+  industry: string | null;
+  location: string | null;
+  
+  // エンジニア向けフィールド
+  skills: JsonValue | null;
+  experienceYears: number | null;
+  portfolioUrl: string | null;
+  
+  // プロフィール設定
+  isProfilePublic: boolean;
+  emailVerifiedAt: Date | null;
+  
+  createdAt: Date;
+  updatedAt: Date;
+
+  // Relations
+  projects?: Project[];
+  proposals?: Proposal[];
+  badges?: UserBadge[];
+  receivedReviews?: Review[];
+  blogPosts?: BlogPost[];
+};
+
+export type Project = {
   id: string;
   userId: string;
-  type: NotificationType;
   title: string;
-  body: string;
-  readAt?: Date;
+  description: string;
+  budget: number;
+  deadline: Date | null;
+  requiredSkills: JsonValue | null;
+  status: ProjectStatus;
   createdAt: Date;
+  updatedAt: Date;
   user: User;
-}
+  proposals?: Proposal[];
+};
 
-export interface Review {
+export type Proposal = {
+  id: string;
+  projectId: string;
+  engineerId: string;
+  proposalText: string;
+  approachDescription: string;
+  proposedBudget: number;
+  proposedTimeline: string;
+  attachments: JsonValue | null;
+  status: ProposalStatus;
+  rating: number | null;
+  ratingComment: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  project: Project;
+  engineer: User;
+  messages?: Message[];
+};
+
+export type Contract = {
+  id: string;
+  projectId: string;
+  proposalId: string;
+  contractAmount: number;
+  startDate: Date;
+  endDate: Date;
+  deliverables: JsonValue | null;
+  status: ContractStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  project: Project;
+  proposal: Proposal;
+  messages?: Message[];
+  reviews?: Review[];
+};
+
+export type Message = {
+  id: string;
+  contractId: string;
+  senderId: string;
+  parentId: string | null;
+  messageBody: string;
+  attachments: JsonValue | null;
+  isTemplate: boolean;
+  isPinned: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  sender: User;
+  parent: Message | null;
+  replies?: Message[];
+};
+
+export type Review = {
   id: string;
   contractId: string;
   reviewerId: string;
@@ -197,8 +147,31 @@ export interface Review {
   rating: number;
   comment: string;
   createdAt: Date;
-  contract: Contract & {
-    project: Project;
-  };
+  contract: Contract;
   reviewer: User;
-}
+};
+
+export type UserBadge = {
+  id: string;
+  userId: string;
+  badgeType: BadgeType;
+  awardedAt: Date;
+  user: User;
+};
+
+export type BlogPost = {
+  id: string;
+  title: string;
+  content: string;
+  published: boolean;
+  authorId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  publishedAt: Date | null;
+  author: {
+    id: string;
+    displayName: string;
+    profileImageUrl: string | null;
+    role: UserRole;
+  };
+};

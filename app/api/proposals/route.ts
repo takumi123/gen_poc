@@ -1,4 +1,4 @@
-import { prisma } from '../../../lib/db'
+import { prisma } from 'lib/db'
 import { NextResponse } from 'next/server'
 
 // 提案一覧取得
@@ -24,6 +24,13 @@ export async function GET(request: Request) {
             title: true,
             budget: true,
             status: true,
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                companyName: true,
+              },
+            },
           },
         },
         engineer: {
@@ -72,6 +79,9 @@ export async function POST(request: Request) {
     // プロジェクトの存在確認
     const project = await prisma.project.findUnique({
       where: { id: projectId },
+      include: {
+        user: true,
+      },
     })
 
     if (!project) {
@@ -81,35 +91,68 @@ export async function POST(request: Request) {
       )
     }
 
-    // 提案の作成
-    const proposal = await prisma.proposal.create({
-      data: {
-        projectId,
-        engineerId,
-        proposalText,
-        proposedBudget,
-        proposedTimeline,
-      },
-      include: {
-        project: {
-          select: {
-            id: true,
-            title: true,
-            budget: true,
-            status: true,
+    // トランザクションで提案とメッセージを作成
+    const result = await prisma.$transaction(async (tx) => {
+      // 提案の作成
+      const proposal = await tx.proposal.create({
+        data: {
+          projectId,
+          engineerId,
+          proposalText,
+          proposedBudget,
+          proposedTimeline,
+          approachDescription: proposalText, // 提案内容を説明文としても使用
+        },
+        include: {
+          project: {
+            select: {
+              id: true,
+              title: true,
+              budget: true,
+              status: true,
+              user: {
+                select: {
+                  id: true,
+                  displayName: true,
+                  companyName: true,
+                },
+              },
+            },
+          },
+          engineer: {
+            select: {
+              id: true,
+              displayName: true,
+              profileImageUrl: true,
+            },
           },
         },
-        engineer: {
-          select: {
-            id: true,
-            displayName: true,
-            profileImageUrl: true,
-          },
+      })
+
+      // 自動メッセージの作成
+      const message = await tx.message.create({
+        data: {
+          contractId: proposal.id, // 提案IDを一時的に契約IDとして使用
+          senderId: engineerId,
+          messageBody: `提案内容:\n${proposalText}\n\n提案予算: ${proposedBudget}円\n想定期間: ${proposedTimeline}`,
+          isTemplate: false,
         },
-      },
+      })
+
+      // 通知の作成（企業向け）
+      await tx.notification.create({
+        data: {
+          userId: project.userId,
+          type: 'NEW_PROPOSAL',
+          title: '新しい提案が届きました',
+          body: `プロジェクト「${project.title}」に新しい提案が届きました。`,
+        },
+      })
+
+      return { ...proposal, messages: [message] }
     })
 
-    return NextResponse.json(proposal)
+    return NextResponse.json(result)
   } catch (error) {
     console.error('提案作成エラー:', error)
     return NextResponse.json(

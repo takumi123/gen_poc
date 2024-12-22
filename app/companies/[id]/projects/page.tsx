@@ -1,13 +1,13 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import { ProjectCard } from '@/app/components/ProjectCard';
-import { UserNav } from '@/app/components/UserNav';
-import { Project, UserRole } from '@/app/types';
+import { prisma } from 'lib/db';
+import { ProjectCard } from 'app/components/ProjectCard';
+import { UserNav } from 'app/components/UserNav';
+import { UserRole } from 'app/types';
 
 interface CompanyProjectsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 async function getCompanyProjects(id: string) {
@@ -21,7 +21,16 @@ async function getCompanyProjects(id: string) {
         orderBy: { createdAt: 'desc' },
         include: {
           user: true,
-          proposals: true,
+          proposals: {
+            include: {
+              project: {
+                include: {
+                  user: true
+                }
+              },
+              engineer: true
+            }
+          },
         },
       },
     },
@@ -35,7 +44,8 @@ async function getCompanyProjects(id: string) {
 }
 
 export default async function CompanyProjectsPage({ params }: CompanyProjectsPageProps) {
-  const company = await getCompanyProjects(params.id);
+  const { id } = await params;
+  const company = await getCompanyProjects(id);
 
   return (
     <div>
@@ -54,7 +64,7 @@ export default async function CompanyProjectsPage({ params }: CompanyProjectsPag
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {company.projects.map((project: Project) => (
+          {company.projects.map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}
           {company.projects.length === 0 && (

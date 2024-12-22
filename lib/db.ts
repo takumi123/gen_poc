@@ -15,7 +15,8 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 export async function testBlobConnection() {
   try {
     const test = new Uint8Array([1, 2, 3])
-    const blob = await put('test.txt', test, {
+    const buffer = Buffer.from(test)
+    const blob = await put('test.txt', buffer, {
       access: 'public',
     })
     console.log('Blob接続成功:', blob)

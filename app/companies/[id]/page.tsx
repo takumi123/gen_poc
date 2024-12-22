@@ -1,15 +1,15 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import UserProfile from '@/app/components/UserProfile';
-import { ProjectCard } from '@/app/components/ProjectCard';
-import { UserNav } from '@/app/components/UserNav';
-import { Project, UserRole, Review } from '@/app/types';
+import { prisma } from 'lib/db';
+import UserProfile from 'app/components/UserProfile';
+import { ProjectCard } from 'app/components/ProjectCard';
+import { UserNav } from 'app/components/UserNav';
+import { UserRole, User, Project, Proposal, Review, Contract } from 'app/types';
 import Image from 'next/image';
 
 interface CompanyPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 async function getCompany(id: string) {
@@ -24,7 +24,16 @@ async function getCompany(id: string) {
         orderBy: { createdAt: 'desc' },
         include: {
           user: true,
-          proposals: true,
+          proposals: {
+            include: {
+              engineer: true,
+              project: {
+                include: {
+                  user: true
+                }
+              }
+            }
+          },
         },
       },
       receivedReviews: {
@@ -32,7 +41,21 @@ async function getCompany(id: string) {
           reviewer: true,
           contract: {
             include: {
-              project: true,
+              project: {
+                include: {
+                  user: true
+                }
+              },
+              proposal: {
+                include: {
+                  engineer: true,
+                  project: {
+                    include: {
+                      user: true
+                    }
+                  }
+                }
+              }
             },
           },
         },
@@ -44,15 +67,125 @@ async function getCompany(id: string) {
     notFound();
   }
 
-  return company;
+  // Prismaの戻り値を適切な型に変換
+  const formattedCompany: User = {
+    id: company.id,
+    email: company.email,
+    role: company.role,
+    status: company.status,
+    displayName: company.displayName,
+    profileImageUrl: company.profileImageUrl,
+    bio: company.bio,
+    companyName: company.companyName,
+    companySize: company.companySize,
+    industry: company.industry,
+    location: company.location,
+    skills: company.skills,
+    experienceYears: company.experienceYears,
+    portfolioUrl: company.portfolioUrl,
+    isProfilePublic: company.isProfilePublic,
+    emailVerifiedAt: company.emailVerifiedAt,
+    createdAt: company.createdAt,
+    updatedAt: company.updatedAt,
+    projects: company.projects.map(project => {
+      const formattedProject: Project = {
+        id: project.id,
+        userId: project.userId,
+        title: project.title,
+        description: project.description,
+        budget: project.budget,
+        deadline: project.deadline,
+        requiredSkills: project.requiredSkills,
+        status: project.status,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        user: project.user,
+        proposals: project.proposals.map(proposal => {
+          const formattedProposal: Proposal = {
+            id: proposal.id,
+            projectId: proposal.projectId,
+            engineerId: proposal.engineerId,
+            proposalText: proposal.proposalText,
+            approachDescription: proposal.approachDescription,
+            proposedBudget: proposal.proposedBudget,
+            proposedTimeline: proposal.proposedTimeline,
+            attachments: proposal.attachments,
+            status: proposal.status,
+            rating: proposal.rating,
+            ratingComment: proposal.ratingComment,
+            createdAt: proposal.createdAt,
+            updatedAt: proposal.updatedAt,
+            project: {
+              ...proposal.project,
+              user: proposal.project.user,
+              proposals: []
+            },
+            engineer: proposal.engineer,
+            messages: []
+          };
+          return formattedProposal;
+        })
+      };
+      return formattedProject;
+    }),
+    receivedReviews: company.receivedReviews.map(review => {
+      const formattedContract: Contract = {
+        ...review.contract,
+        project: {
+          ...review.contract.project,
+          user: review.contract.project.user,
+          proposals: []
+        },
+        proposal: {
+          ...review.contract.proposal,
+          project: {
+            ...review.contract.proposal.project,
+            user: review.contract.proposal.project.user,
+            proposals: []
+          },
+          engineer: review.contract.proposal.engineer,
+          messages: []
+        },
+        messages: [],
+        reviews: []
+      };
+
+      const formattedReview: Review = {
+        id: review.id,
+        contractId: review.contractId,
+        reviewerId: review.reviewerId,
+        revieweeId: review.revieweeId,
+        rating: review.rating,
+        comment: review.comment,
+        createdAt: review.createdAt,
+        contract: formattedContract,
+        reviewer: review.reviewer
+      };
+      return formattedReview;
+    })
+  };
+
+  return formattedCompany;
 }
 
 export default async function CompanyPage({ params }: CompanyPageProps) {
-  const company = await getCompany(params.id);
+  const resolvedParams = await params;
+  const { id } = resolvedParams;
+  const company = await getCompany(id);
+
+  // UserNavに必要な情報のみを抽出
+  const userNavProps = {
+    id: company.id,
+    role: company.role,
+    email: company.email,
+    displayName: company.displayName,
+    profileImageUrl: company.profileImageUrl,
+    status: company.status,
+  };
 
   return (
     <div>
-      <UserNav user={company} />
+      <UserNav user={userNavProps} />
       
       <div className="container mx-auto px-4 py-8">
         <UserProfile user={company} />
@@ -60,20 +193,20 @@ export default async function CompanyPage({ params }: CompanyPageProps) {
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-4">最近の案件</h2>
           <div className="grid gap-6 md:grid-cols-2">
-            {company.projects.slice(0, 4).map((project: Project) => (
+            {company.projects?.slice(0, 4).map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
-            {company.projects.length === 0 && (
+            {(!company.projects || company.projects.length === 0) && (
               <p className="text-gray-500">まだ案件を投稿していません</p>
             )}
           </div>
         </div>
 
-        {company.receivedReviews.length > 0 && (
+        {company.receivedReviews && company.receivedReviews.length > 0 && (
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-4">最近のレビュー</h2>
             <div className="grid gap-6 md:grid-cols-2">
-              {company.receivedReviews.slice(0, 4).map((review: Review) => (
+              {company.receivedReviews.slice(0, 4).map((review) => (
                 <div
                   key={review.id}
                   className="bg-white shadow rounded-lg p-6 border border-gray-200"

@@ -1,4 +1,5 @@
-import { Review } from '@/app/types';
+import { Review } from '../types'
+import Image from 'next/image'
 
 interface ReviewCardProps {
   review: Review;
@@ -12,10 +13,12 @@ export function ReviewCard({ review, showProject = true }: ReviewCardProps) {
         <div className="flex items-center">
           <div className="flex-shrink-0">
             {review.reviewer.profileImageUrl ? (
-              <img
-                className="h-10 w-10 rounded-full"
+              <Image
+                className="rounded-full"
                 src={review.reviewer.profileImageUrl}
                 alt={review.reviewer.displayName}
+                width={40}
+                height={40}
               />
             ) : (
               <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">

@@ -1,13 +1,17 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import { ProposalList } from '@/app/components/ProposalList';
-import { UserNav } from '@/app/components/UserNav';
-import { UserRole, ProposalStatus, Proposal } from '@/app/types';
+import { prisma } from 'lib/db';
+import { ProposalList } from 'app/components/ProposalList';
+import { UserNav } from 'app/components/UserNav';
+import { UserRole, ProposalStatus, Proposal, User } from 'app/types';
 
 interface EngineerProjectsPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
+}
+
+interface EngineerWithProposals extends User {
+  proposals: (Proposal & { engineer: User })[];
 }
 
 async function getEngineerProposals(id: string) {
@@ -35,11 +39,44 @@ async function getEngineerProposals(id: string) {
     notFound();
   }
 
-  return engineer;
+  // Prismaの戻り値を適切な型に変換
+  const formattedEngineer: EngineerWithProposals = {
+    id: engineer.id,
+    email: engineer.email,
+    role: engineer.role,
+    status: engineer.status,
+    displayName: engineer.displayName,
+    profileImageUrl: engineer.profileImageUrl,
+    bio: engineer.bio,
+    companyName: engineer.companyName,
+    companySize: engineer.companySize,
+    industry: engineer.industry,
+    location: engineer.location,
+    skills: engineer.skills,
+    experienceYears: engineer.experienceYears,
+    portfolioUrl: engineer.portfolioUrl,
+    isProfilePublic: engineer.isProfilePublic,
+    emailVerifiedAt: engineer.emailVerifiedAt,
+    createdAt: engineer.createdAt,
+    updatedAt: engineer.updatedAt,
+    proposals: engineer.proposals.map(proposal => ({
+      ...proposal,
+      project: {
+        ...proposal.project,
+        user: proposal.project.user,
+        proposals: []
+      },
+      messages: [],
+      engineer: proposal.engineer
+    }))
+  };
+
+  return formattedEngineer;
 }
 
 export default async function EngineerProjectsPage({ params }: EngineerProjectsPageProps) {
-  const engineer = await getEngineerProposals(params.id);
+  const { id } = await params;
+  const engineer = await getEngineerProposals(id);
 
   const proposalStatusLabels: Record<ProposalStatus, string> = {
     [ProposalStatus.DRAFT]: '下書き',
@@ -50,16 +87,17 @@ export default async function EngineerProjectsPage({ params }: EngineerProjectsP
   };
 
   // 提案をステータスごとにグループ化
-  const proposalsByStatus = engineer.proposals.reduce((acc: Record<ProposalStatus, Proposal[]>, proposal: Proposal) => {
-    if (!acc[proposal.status]) {
-      acc[proposal.status] = [];
+  const initialStatusGroups = Object.values(ProposalStatus).reduce((acc, status) => {
+    acc[status] = [];
+    return acc;
+  }, {} as Record<ProposalStatus, (Proposal & { engineer: User })[]>);
+
+  const proposalsByStatus = engineer.proposals.reduce((acc, proposal) => {
+    if (acc[proposal.status]) {
+      acc[proposal.status].push(proposal);
     }
-    acc[proposal.status].push(proposal);
     return acc;
-  }, Object.keys(ProposalStatus).reduce((acc, key) => {
-    acc[key as ProposalStatus] = [];
-    return acc;
-  }, {} as Record<ProposalStatus, Proposal[]>));
+  }, initialStatusGroups);
 
   return (
     <div>
@@ -80,24 +118,27 @@ export default async function EngineerProjectsPage({ params }: EngineerProjectsP
         {/* ステータスタブ */}
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex space-x-8">
-            {Object.entries(proposalStatusLabels).map(([status, label]) => (
-              <button
-                key={status}
-                className={`
-                  whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
-                  ${proposalsByStatus[status as ProposalStatus]?.length > 0
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                `}
-              >
-                {label}
-                {proposalsByStatus[status as ProposalStatus]?.length > 0 && (
-                  <span className="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-600">
-                    {proposalsByStatus[status as ProposalStatus].length}
-                  </span>
-                )}
-              </button>
-            ))}
+            {Object.entries(proposalStatusLabels).map(([status, label]) => {
+              const statusKey = status as ProposalStatus;
+              return (
+                <button
+                  key={status}
+                  className={`
+                    whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm
+                    ${proposalsByStatus[statusKey]?.length > 0
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                  `}
+                >
+                  {label}
+                  {proposalsByStatus[statusKey]?.length > 0 && (
+                    <span className="ml-2 py-0.5 px-2.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-600">
+                      {proposalsByStatus[statusKey].length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </div>
 

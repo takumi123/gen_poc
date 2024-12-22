@@ -3,13 +3,15 @@ import { prisma } from '../../../lib/db';
 import UserProfile from '../../components/UserProfile';
 import { ProjectCard } from '../../components/ProjectCard';
 import { ProposalList } from '../../components/ProposalList';
-import { UserRole, Project, Proposal, UserBadge, Review } from '../../types';
+import { BlogList } from '../../components/BlogList';
+import { UserRole, Project, User } from '../../types';
 import Image from 'next/image';
+import { auth } from '../../../auth';
 
-interface UserPageProps {
-  params: {
+type UserPageProps = {
+  params: Promise<{
     id: string;
-  };
+  }>
 }
 
 async function getUser(id: string) {
@@ -36,6 +38,20 @@ async function getUser(id: string) {
           engineer: true,
         },
       },
+      blogPosts: {
+        where: { published: true },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          author: {
+            select: {
+              id: true,
+              displayName: true,
+              profileImageUrl: true,
+              role: true,
+            },
+          },
+        },
+      },
       badges: true,
       receivedReviews: {
         include: {
@@ -58,20 +74,41 @@ async function getUser(id: string) {
 }
 
 export default async function UserPage({ params }: UserPageProps) {
-  const user = await getUser(params.id);
+  const resolvedParams = await params;
+  const userId = resolvedParams.id;
+  const user = await getUser(userId);
+  const session = await auth();
   const isCompany = user.role === UserRole.CLIENT;
+  const isOwner = session?.user?.id === user.id;
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <UserProfile user={user} />
+      <UserProfile user={user as unknown as User} />
+
+      {/* ブログ記事一覧 */}
+      <div className="mt-8">
+        <h2 className="text-2xl font-bold mb-4">ブログ記事</h2>
+        <BlogList
+          posts={user.blogPosts}
+          showAuthor={false}
+          isOwner={isOwner}
+          currentUserId={session?.user?.id}
+        />
+      </div>
 
       {isCompany ? (
         // 企業向け表示
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-4">投稿した案件</h2>
           <div className="grid gap-6 md:grid-cols-2">
-            {user.projects.map((project: Project) => (
-              <ProjectCard key={project.id} project={project} />
+            {user.projects.map((prismaProject) => (
+              <ProjectCard 
+                key={prismaProject.id} 
+                project={{
+                  ...prismaProject,
+                  proposals: []
+                } as unknown as Project}
+              />
             ))}
             {user.projects.length === 0 && (
               <p className="text-gray-500">まだ案件を投稿していません</p>
@@ -83,7 +120,36 @@ export default async function UserPage({ params }: UserPageProps) {
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-4">提案した案件</h2>
           <ProposalList
-            proposals={user.proposals as Proposal[]}
+            proposals={user.proposals?.map(p => ({
+              id: p.id,
+              projectId: p.projectId,
+              engineerId: p.engineerId,
+              proposalText: p.proposalText,
+              approachDescription: p.approachDescription,
+              proposedBudget: p.proposedBudget,
+              proposedTimeline: p.proposedTimeline,
+              attachments: p.attachments,
+              status: p.status,
+              rating: p.rating,
+              ratingComment: p.ratingComment,
+              createdAt: p.createdAt,
+              updatedAt: p.updatedAt,
+              project: {
+                id: p.project.id,
+                userId: p.project.userId,
+                title: p.project.title,
+                description: p.project.description,
+                budget: p.project.budget,
+                deadline: p.project.deadline,
+                requiredSkills: p.project.requiredSkills,
+                status: p.project.status,
+                createdAt: p.project.createdAt,
+                updatedAt: p.project.updatedAt,
+                user: p.project.user,
+                proposals: []
+              },
+              engineer: p.engineer
+            })) || []}
             isProjectOwner={false}
           />
         </div>
@@ -94,7 +160,7 @@ export default async function UserPage({ params }: UserPageProps) {
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-4">レビュー</h2>
           <div className="space-y-4">
-            {user.receivedReviews.map((review: Review) => (
+            {user.receivedReviews.map((review) => (
               <div
                 key={review.id}
                 className="bg-white shadow rounded-lg p-6 border border-gray-200"
@@ -156,7 +222,7 @@ export default async function UserPage({ params }: UserPageProps) {
         <div className="mt-8">
           <h2 className="text-2xl font-bold mb-4">獲得バッジ</h2>
           <div className="flex flex-wrap gap-4">
-            {user.badges.map((badge: UserBadge) => (
+            {user.badges.map((badge) => (
               <div
                 key={badge.id}
                 className="bg-white shadow rounded-lg p-4 border border-gray-200"

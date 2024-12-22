@@ -1,131 +1,137 @@
-import { prisma } from '../../../../../lib/db'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from 'auth'
+import { prisma } from 'lib/db'
 
-// 契約ごとのメッセージ一覧取得
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: '認証が必要です' },
+      { status: 401 }
+    )
+  }
+
   try {
+    const { id: contractId } = await context.params;
+
     // 契約の存在確認
     const contract = await prisma.contract.findUnique({
-      where: { id: params.id },
+      where: { id: contractId },
+      include: {
+        project: true,
+        proposal: true,
+        messages: {
+          include: {
+            sender: true,
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
+      },
     })
 
     if (!contract) {
       return NextResponse.json(
-        { error: '指定された契約が存在しません' },
+        { error: '契約が見つかりません' },
         { status: 404 }
       )
     }
 
-    // メッセージの取得
-    const messages = await prisma.message.findMany({
-      where: {
-        contractId: params.id,
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            profileImageUrl: true,
-            role: true,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'asc', // 古い順に表示
-      },
-    })
+    // 権限チェック
+    const isAuthorized =
+      session.user.id === contract.project.userId ||
+      session.user.id === contract.proposal.engineerId
 
-    return NextResponse.json(messages)
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: '権限がありません' },
+        { status: 403 }
+      )
+    }
+
+    return NextResponse.json(contract.messages)
   } catch (error) {
-    console.error('契約メッセージ一覧取得エラー:', error)
+    console.error('メッセージ取得エラー:', error)
     return NextResponse.json(
-      { error: '契約のメッセージ一覧の取得に失敗しました' },
+      { error: '内部サーバーエラー' },
       { status: 500 }
     )
   }
 }
 
-// 契約へのメッセージ送信
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
-  try {
-    const body = await request.json()
-    const { senderId, messageBody } = body
+  const session = await auth()
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: '認証が必要です' },
+      { status: 401 }
+    )
+  }
 
-    // バリデーション
-    if (!senderId || !messageBody) {
-      return NextResponse.json(
-        { error: '必須項目が不足しています' },
-        { status: 400 }
-      )
-    }
+  try {
+    const { id: contractId } = await context.params;
+    const { messageBody } = await request.json()
 
     // 契約の存在確認
     const contract = await prisma.contract.findUnique({
-      where: { id: params.id },
+      where: { id: contractId },
       include: {
-        project: {
-          include: {
-            user: true,
-          },
-        },
-        proposal: {
-          include: {
-            engineer: true,
-          },
-        },
+        project: true,
+        proposal: true,
       },
     })
 
     if (!contract) {
       return NextResponse.json(
-        { error: '指定された契約が存在しません' },
+        { error: '契約が見つかりません' },
         { status: 404 }
       )
     }
 
-    // 送信者が契約に関連するユーザーかチェック
+    // 権限チェック
     const isAuthorized =
-      senderId === contract.project.user.id ||
-      senderId === contract.proposal.engineer.id
+      session.user.id === contract.project.userId ||
+      session.user.id === contract.proposal.engineerId
 
     if (!isAuthorized) {
       return NextResponse.json(
-        { error: 'このメッセージの送信は許可されていません' },
+        { error: '権限がありません' },
         { status: 403 }
       )
     }
 
-    // メッセージの作成
+    // メッセージ作成
     const message = await prisma.message.create({
       data: {
-        contractId: params.id,
-        senderId,
+        contractId,
+        senderId: session.user.id,
         messageBody,
+        isTemplate: false,
+        isPinned: false,
       },
       include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            profileImageUrl: true,
-            role: true,
-          },
-        },
+        sender: true,
       },
     })
 
     return NextResponse.json(message)
   } catch (error) {
-    console.error('契約メッセージ送信エラー:', error)
+    console.error('メッセージ作成エラー:', error)
     return NextResponse.json(
-      { error: 'メッセージの送信に失敗しました' },
+      { error: '内部サーバーエラー' },
       { status: 500 }
     )
   }

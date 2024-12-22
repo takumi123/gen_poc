@@ -1,15 +1,22 @@
-import { prisma } from '../../../../lib/db'
-import { NextResponse } from 'next/server'
+import { prisma } from 'lib/db'
+import { NextRequest, NextResponse } from 'next/server'
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 // 提案詳細取得
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
   try {
+    const { id } = await context.params;
     const proposal = await prisma.proposal.findUnique({
       where: {
-        id: params.id,
+        id,
       },
       include: {
         project: {
@@ -56,16 +63,17 @@ export async function GET(
 
 // 提案更新
 export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
   try {
+    const { id } = await context.params;
     const body = await request.json()
     const { proposalText, proposedBudget, proposedTimeline } = body
 
     const proposal = await prisma.proposal.update({
       where: {
-        id: params.id,
+        id,
       },
       data: {
         ...(proposalText && { proposalText }),
@@ -103,13 +111,14 @@ export async function PATCH(
 
 // 提案削除
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
   try {
+    const { id } = await context.params;
     await prisma.proposal.delete({
       where: {
-        id: params.id,
+        id,
       },
     })
 

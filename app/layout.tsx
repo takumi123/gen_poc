@@ -1,5 +1,9 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { Header } from './components/Header'
+import { Footer } from './components/Footer'
+import { Sidebar } from './components/Sidebar'
+import { Providers } from './providers'
 
 export const metadata: Metadata = {
   title: 'PoC専門のマッチングプラットフォーム',
@@ -12,20 +16,24 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ja">
-      <body>
-        <div className="min-h-screen bg-gray-100">
-          <header className="bg-white shadow">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-              <h1 className="text-2xl font-bold text-gray-900">
-                PoC専門のマッチングプラットフォーム
-              </h1>
+    <html lang="ja" className="h-full">
+      <body className="h-full">
+        <Providers>
+          <div className="min-h-screen bg-gray-100">
+            <Header />
+            <div className="flex min-h-[calc(100vh-64px)]">
+              <Sidebar />
+              <div className="flex-1 flex flex-col w-full">
+                <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                  <div className="w-full">
+                    {children}
+                  </div>
+                </main>
+                <Footer />
+              </div>
             </div>
-          </header>
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </main>
-        </div>
+          </div>
+        </Providers>
       </body>
     </html>
   )

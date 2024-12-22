@@ -1,15 +1,21 @@
-import { prisma } from '../../../../../lib/db'
-import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from 'lib/db'
+import { NextRequest, NextResponse } from 'next/server'
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
 
 // 提案の承認/却下
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: RouteContext
 ) {
   try {
     const body = await request.json()
     const { action } = body
+    const { id } = await context.params;
 
     if (action !== 'accept' && action !== 'reject') {
       return NextResponse.json(
@@ -19,7 +25,7 @@ export async function POST(
     }
 
     const proposal = await prisma.proposal.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         project: true,
       },
@@ -33,10 +39,10 @@ export async function POST(
     }
 
     // トランザクションで提案のステータス更新と契約作成を行う
-    const result = await prisma.$transaction(async (tx: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use'>) => {
+    const result = await prisma.$transaction(async (tx) => {
       // 提案のステータス更新
       const updatedProposal = await tx.proposal.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: action === 'accept' ? 'ACCEPTED' : 'REJECTED',
         },

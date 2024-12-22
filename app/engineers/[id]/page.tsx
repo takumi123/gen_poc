@@ -1,15 +1,15 @@
 import { notFound } from 'next/navigation';
-import { prisma } from '@/lib/db';
-import UserProfile from '@/app/components/UserProfile';
-import { ProposalList } from '@/app/components/ProposalList';
-import { UserNav } from '@/app/components/UserNav';
-import { UserRole, Review, UserBadge } from '@/app/types';
+import { prisma } from 'lib/db';
+import UserProfile from 'app/components/UserProfile';
+import { ProposalList } from 'app/components/ProposalList';
+import { UserNav } from 'app/components/UserNav';
+import { UserRole, User } from 'app/types';
 import Image from 'next/image';
 
 interface EngineerPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 async function getEngineer(id: string) {
@@ -36,7 +36,21 @@ async function getEngineer(id: string) {
           reviewer: true,
           contract: {
             include: {
-              project: true,
+              project: {
+                include: {
+                  user: true
+                }
+              },
+              proposal: {
+                include: {
+                  engineer: true,
+                  project: {
+                    include: {
+                      user: true
+                    }
+                  }
+                }
+              }
             },
           },
         },
@@ -49,11 +63,72 @@ async function getEngineer(id: string) {
     notFound();
   }
 
-  return engineer;
+  // Prismaの戻り値を適切な型に変換
+  const formattedEngineer = {
+    ...engineer,
+    proposals: engineer.proposals.map(proposal => ({
+      ...proposal,
+      project: {
+        ...proposal.project,
+        user: proposal.project.user,
+        proposals: []
+      },
+      messages: []
+    })),
+    badges: engineer.badges.map(badge => ({
+      ...badge,
+      user: {
+        id: engineer.id,
+        email: engineer.email,
+        role: engineer.role,
+        status: engineer.status,
+        displayName: engineer.displayName,
+        profileImageUrl: engineer.profileImageUrl,
+        bio: engineer.bio,
+        companyName: engineer.companyName,
+        companySize: engineer.companySize,
+        industry: engineer.industry,
+        location: engineer.location,
+        skills: engineer.skills,
+        experienceYears: engineer.experienceYears,
+        portfolioUrl: engineer.portfolioUrl,
+        isProfilePublic: engineer.isProfilePublic,
+        emailVerifiedAt: engineer.emailVerifiedAt,
+        createdAt: engineer.createdAt,
+        updatedAt: engineer.updatedAt
+      }
+    })),
+    receivedReviews: engineer.receivedReviews.map(review => ({
+      ...review,
+      contract: {
+        ...review.contract,
+        project: {
+          ...review.contract.project,
+          user: review.contract.project.user,
+          proposals: []
+        },
+        proposal: {
+          ...review.contract.proposal,
+          project: {
+            ...review.contract.proposal.project,
+            user: review.contract.proposal.project.user,
+            proposals: []
+          },
+          engineer: review.contract.proposal.engineer,
+          messages: []
+        },
+        messages: [],
+        reviews: []
+      }
+    }))
+  } as User;
+
+  return formattedEngineer;
 }
 
 export default async function EngineerPage({ params }: EngineerPageProps) {
-  const engineer = await getEngineer(params.id);
+  const { id } = await params;
+  const engineer = await getEngineer(id);
 
   return (
     <div>
@@ -82,7 +157,7 @@ export default async function EngineerPage({ params }: EngineerPageProps) {
         )}
 
         {/* 最近の提案 */}
-        {engineer.proposals.length > 0 && (
+        {engineer.proposals && engineer.proposals.length > 0 && (
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-4">最近の提案</h2>
             <ProposalList
@@ -93,11 +168,11 @@ export default async function EngineerPage({ params }: EngineerPageProps) {
         )}
 
         {/* レビュー一覧 */}
-        {engineer.receivedReviews.length > 0 && (
+        {engineer.receivedReviews && engineer.receivedReviews.length > 0 && (
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-4">レビュー</h2>
             <div className="grid gap-6 md:grid-cols-2">
-              {engineer.receivedReviews.slice(0, 4).map((review: Review) => (
+              {engineer.receivedReviews.slice(0, 4).map((review) => (
                 <div
                   key={review.id}
                   className="bg-white shadow rounded-lg p-6 border border-gray-200"
@@ -155,11 +230,11 @@ export default async function EngineerPage({ params }: EngineerPageProps) {
         )}
 
         {/* バッジ一覧 */}
-        {engineer.badges.length > 0 && (
+        {engineer.badges && engineer.badges.length > 0 && (
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-4">獲得バッジ</h2>
             <div className="flex flex-wrap gap-4">
-              {engineer.badges.map((badge: UserBadge) => (
+              {engineer.badges.map((badge) => (
                 <div
                   key={badge.id}
                   className="bg-white shadow rounded-lg p-4 border border-gray-200"

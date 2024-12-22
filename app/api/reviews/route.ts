@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { BadgeType, NotificationType, Review } from '@/app/types';
+import { prisma } from 'lib/db';
+import { BadgeType, NotificationType } from 'app/types';
 
 export async function POST(request: Request) {
   try {
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
 
     // 平均評価が4.5以上で、レビュー数が3件以上の場合
     const averageRating =
-      userReviews.reduce((sum: number, review: Review) => sum + review.rating, 0) /
+      userReviews.reduce((sum: number, review) => sum + review.rating, 0) /
       userReviews.length;
     if (averageRating >= 4.5 && userReviews.length >= 3) {
       const existingTopRatedBadge = await prisma.userBadge.findFirst({
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         await prisma.notification.create({
           data: {
             userId: revieweeId,
-            type: NotificationType.REVIEW_RECEIVED,
+            type: NotificationType.BADGE_EARNED,
             title: '新しいバッジを獲得しました',
             body: 'トップレートバッジを獲得しました！高評価を維持していただき、ありがとうございます。',
           },
