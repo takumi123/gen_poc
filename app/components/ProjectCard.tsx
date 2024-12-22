@@ -1,4 +1,4 @@
-import { Project } from '../types'
+import { Project, ProjectStatus } from '../types'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import Link from 'next/link'
@@ -9,9 +9,19 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const statusColors = {
-    OPEN: 'bg-green-100 text-green-800',
-    IN_PROGRESS: 'bg-blue-100 text-blue-800',
-    CLOSED: 'bg-gray-100 text-gray-800',
+    [ProjectStatus.DRAFT]: 'bg-gray-100 text-gray-800',
+    [ProjectStatus.OPEN]: 'bg-green-100 text-green-800',
+    [ProjectStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
+    [ProjectStatus.CLOSED]: 'bg-gray-100 text-gray-800',
+    [ProjectStatus.CANCELLED]: 'bg-red-100 text-red-800',
+  }
+
+  const statusText = {
+    [ProjectStatus.DRAFT]: '下書き',
+    [ProjectStatus.OPEN]: '募集中',
+    [ProjectStatus.IN_PROGRESS]: '進行中',
+    [ProjectStatus.CLOSED]: '完了',
+    [ProjectStatus.CANCELLED]: 'キャンセル',
   }
 
   return (
@@ -26,11 +36,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
             statusColors[project.status]
           }`}
         >
-          {project.status === 'OPEN'
-            ? '募集中'
-            : project.status === 'IN_PROGRESS'
-            ? '進行中'
-            : '完了'}
+          {statusText[project.status]}
         </span>
       </div>
 
@@ -66,7 +72,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
           予算: ¥{project.budget.toLocaleString()}
         </div>
         <div className="text-gray-500">
-          提案数: {project.proposals.length}件
+          提案数: {project.proposals?.length ?? 0}件
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { Proposal } from '../types'
+import { Proposal, ProposalStatus } from '../types'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 
@@ -18,15 +18,19 @@ export function ProposalList({
   onReject,
 }: ProposalListProps) {
   const statusColors = {
-    SUBMITTED: 'bg-yellow-100 text-yellow-800',
-    ACCEPTED: 'bg-green-100 text-green-800',
-    REJECTED: 'bg-red-100 text-red-800',
+    [ProposalStatus.DRAFT]: 'bg-gray-100 text-gray-800',
+    [ProposalStatus.SUBMITTED]: 'bg-yellow-100 text-yellow-800',
+    [ProposalStatus.ACCEPTED]: 'bg-green-100 text-green-800',
+    [ProposalStatus.REJECTED]: 'bg-red-100 text-red-800',
+    [ProposalStatus.WITHDRAWN]: 'bg-gray-100 text-gray-800',
   }
 
   const statusText = {
-    SUBMITTED: '提案中',
-    ACCEPTED: '承認済み',
-    REJECTED: '却下',
+    [ProposalStatus.DRAFT]: '下書き',
+    [ProposalStatus.SUBMITTED]: '提案中',
+    [ProposalStatus.ACCEPTED]: '承認済み',
+    [ProposalStatus.REJECTED]: '却下',
+    [ProposalStatus.WITHDRAWN]: '取り下げ',
   }
 
   return (
@@ -78,6 +82,7 @@ export function ProposalList({
 
             <div className="mt-4">
               <p className="text-gray-700">{proposal.proposalText}</p>
+              <p className="mt-2 text-gray-700">{proposal.approachDescription}</p>
             </div>
 
             <div className="mt-4 flex justify-between items-center">
@@ -95,7 +100,26 @@ export function ProposalList({
               </div>
             </div>
 
-            {isProjectOwner && proposal.status === 'SUBMITTED' && (
+            {proposal.attachments && Object.keys(proposal.attachments).length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-500 mb-2">添付資料</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(proposal.attachments).map(([name, url]) => (
+                    <a
+                      key={name}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-3 py-1 rounded-md bg-gray-100 text-sm text-gray-700 hover:bg-gray-200"
+                    >
+                      {name}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {isProjectOwner && proposal.status === ProposalStatus.SUBMITTED && (
               <div className="mt-6 flex justify-end space-x-4">
                 <button
                   onClick={() => onReject?.(proposal.id)}

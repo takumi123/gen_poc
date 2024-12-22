@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { ja } from 'date-fns/locale'
 import { ProjectProposals } from '../../components/ProjectProposals'
+import Image from 'next/image'
+import { ProjectStatus } from '@/app/types'
 
 async function getProject(id: string): Promise<Project> {
   const res = await fetch(`http://localhost:3000/api/projects/${id}`, {
@@ -38,16 +40,20 @@ export default async function ProjectDetail({
   const project = await getProject(params.id)
   const proposals = await getProposals(params.id)
 
-  const statusColors = {
-    OPEN: 'bg-green-100 text-green-800',
-    IN_PROGRESS: 'bg-blue-100 text-blue-800',
-    CLOSED: 'bg-gray-100 text-gray-800',
+  const statusColors: Record<ProjectStatus, string> = {
+    [ProjectStatus.OPEN]: 'bg-green-100 text-green-800',
+    [ProjectStatus.IN_PROGRESS]: 'bg-blue-100 text-blue-800',
+    [ProjectStatus.CLOSED]: 'bg-gray-100 text-gray-800',
+    [ProjectStatus.DRAFT]: 'bg-gray-100 text-gray-800',
+    [ProjectStatus.CANCELLED]: 'bg-gray-100 text-gray-800',
   }
 
-  const statusText = {
-    OPEN: '募集中',
-    IN_PROGRESS: '進行中',
-    CLOSED: '完了',
+  const statusText: Record<ProjectStatus, string> = {
+    [ProjectStatus.OPEN]: '募集中',
+    [ProjectStatus.IN_PROGRESS]: '進行中',
+    [ProjectStatus.CLOSED]: '完了',
+    [ProjectStatus.DRAFT]: 'ドラフト',
+    [ProjectStatus.CANCELLED]: 'キャンセル',
   }
 
   // TODO: 実際のユーザー情報を使用する
@@ -71,10 +77,12 @@ export default async function ProjectDetail({
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   {project.user.profileImageUrl ? (
-                    <img
+                    <Image
                       className="h-10 w-10 rounded-full"
                       src={project.user.profileImageUrl}
                       alt={project.user.displayName}
+                      width={40}
+                      height={40}
                     />
                   ) : (
                     <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">

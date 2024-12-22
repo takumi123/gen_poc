@@ -16,13 +16,40 @@ enum UserRole {
   ADMIN
 }
 
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
 model User {
   id              String     @id @default(cuid())
   email           String     @unique
   password        String     // ハッシュ化されたパスワード
   role            UserRole
+  status          UserStatus @default(PENDING)
   displayName     String
+  emailVerified   DateTime?  // Auth.js required
+  accounts        Account[]  // Auth.js required
+  sessions        Session[]  // Auth.js required
   profileImageUrl String?
+  bio            String?    @db.Text
+  
+  // 企業向けフィールド
+  companyName     String?
+  companySize     Int?
+  industry        String?
+  location        String?
+  
+  // エンジニア向けフィールド
+  skills          Json?      // スキルと経験年数
+  experienceYears Int?
+  portfolioUrl    String?
+  
+  // プロフィール設定
+  isProfilePublic Boolean    @default(true)
+  emailVerifiedAt DateTime?
+  
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -30,51 +57,116 @@ model User {
   projects        Project[]  // 企業が投稿したPoC案件
   proposals       Proposal[] // エンジニアが送信した提案
   sentMessages    Message[]  @relation("SentMessages")
+  messageReads    MessageRead[]
+  messageReactions MessageReaction[]
+  badges          UserBadge[]
+  notifications   Notification[]
+  receivedReviews Review[]    @relation("ReceivedReviews")
+  givenReviews    Review[]    @relation("GivenReviews")
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 enum ProjectStatus {
+  DRAFT
   OPEN
   IN_PROGRESS
   CLOSED
+  CANCELLED
 }
 
 model Project {
-  id          String        @id @default(cuid())
-  userId      String        // 投稿した企業のユーザーID
-  title       String
-  description String
-  budget      Int
-  status      ProjectStatus @default(OPEN)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id             String        @id @default(cuid())
+  userId         String        // 投稿した企業のユーザーID
+  title          String
+  description    String        @db.Text
+  budget         Int
+  deadline       DateTime?
+  requiredSkills Json?         // 必要なスキルタグ
+  status         ProjectStatus @default(DRAFT)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   // Relations
-  user        User         @relation(fields: [userId], references: [id])
-  proposals   Proposal[]
-  contract    Contract?
+  user           User          @relation(fields: [userId], references: [id])
+  proposals      Proposal[]
+  contract       Contract?
 }
 
 enum ProposalStatus {
+  DRAFT
   SUBMITTED
   ACCEPTED
   REJECTED
+  WITHDRAWN
 }
 
 model Proposal {
-  id               String         @id @default(cuid())
-  projectId        String
-  engineerId       String
-  proposalText     String
-  proposedBudget   Int
-  proposedTimeline String
-  status           ProposalStatus @default(SUBMITTED)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                 String         @id @default(cuid())
+  projectId          String
+  engineerId         String
+  proposalText       String         @db.Text
+  approachDescription String        @db.Text
+  proposedBudget     Int
+  proposedTimeline   String
+  attachments        Json?          // 添付資料のURL配列
+  status             ProposalStatus @default(DRAFT)
+  rating             Int?           // 企業からの評価（1-5）
+  ratingComment      String?        @db.Text
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   // Relations
-  project          Project        @relation(fields: [projectId], references: [id])
-  engineer         User           @relation(fields: [engineerId], references: [id])
-  contract         Contract?
+  project            Project        @relation(fields: [projectId], references: [id])
+  engineer           User           @relation(fields: [engineerId], references: [id])
+  contract           Contract?
+  questions          ProposalQuestion[]
+}
+
+model ProposalQuestion {
+  id          String   @id @default(cuid())
+  proposalId  String
+  userId      String   // 質問者のID
+  question    String   @db.Text
+  answer      String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  proposal    Proposal @relation(fields: [proposalId], references: [id])
 }
 
 enum ContractStatus {
@@ -90,6 +182,7 @@ model Contract {
   contractAmount  Int
   startDate       DateTime
   endDate         DateTime
+  deliverables    Json?          // 成果物情報
   status          ContractStatus @default(ACTIVE)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -98,16 +191,109 @@ model Contract {
   project         Project        @relation(fields: [projectId], references: [id])
   proposal        Proposal       @relation(fields: [proposalId], references: [id])
   messages        Message[]
+  reviews         Review[]
 }
 
 model Message {
-  id          String   @id @default(cuid())
-  contractId  String
-  senderId    String
-  messageBody String
-  createdAt   DateTime @default(now())
+  id            String    @id @default(cuid())
+  contractId    String
+  senderId      String
+  parentId      String?   // スレッド親メッセージID
+  messageBody   String    @db.Text
+  attachments   Json?     // 添付ファイルのURL配列
+  isTemplate    Boolean   @default(false)
+  isPinned      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations
-  contract    Contract @relation(fields: [contractId], references: [id])
-  sender      User     @relation("SentMessages", fields: [senderId], references: [id])
+  contract      Contract  @relation(fields: [contractId], references: [id])
+  sender        User      @relation("SentMessages", fields: [senderId], references: [id])
+  parent        Message?  @relation("ThreadReplies", fields: [parentId], references: [id])
+  replies       Message[] @relation("ThreadReplies")
+  reads         MessageRead[]
+  reactions     MessageReaction[]
+}
+
+model MessageRead {
+  id         String   @id @default(cuid())
+  messageId  String
+  userId     String
+  readAt     DateTime @default(now())
+
+  // Relations
+  message    Message  @relation(fields: [messageId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
+}
+
+model MessageReaction {
+  id         String   @id @default(cuid())
+  messageId  String
+  userId     String
+  reaction   String   // 絵文字
+  createdAt  DateTime @default(now())
+
+  // Relations
+  message    Message  @relation(fields: [messageId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, reaction])
+}
+
+enum BadgeType {
+  FIRST_PROJECT
+  FIVE_PROJECTS
+  TOP_RATED
+  QUICK_RESPONSE
+  EXPERT
+}
+
+model UserBadge {
+  id         String    @id @default(cuid())
+  userId     String
+  badgeType  BadgeType
+  awardedAt  DateTime  @default(now())
+
+  // Relations
+  user       User      @relation(fields: [userId], references: [id])
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  contractId   String
+  reviewerId   String   // レビューを書いた人
+  revieweeId   String   // レビューされた人
+  rating       Int      // 1-5の評価
+  comment      String   @db.Text
+  createdAt    DateTime @default(now())
+
+  // Relations
+  contract     Contract @relation(fields: [contractId], references: [id])
+  reviewer     User     @relation("GivenReviews", fields: [reviewerId], references: [id])
+  reviewee     User     @relation("ReceivedReviews", fields: [revieweeId], references: [id])
+}
+
+enum NotificationType {
+  NEW_PROPOSAL
+  PROPOSAL_ACCEPTED
+  PROPOSAL_REJECTED
+  NEW_MESSAGE
+  CONTRACT_COMPLETED
+  PAYMENT_RECEIVED
+  REVIEW_RECEIVED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String          @db.Text
+  readAt    DateTime?
+  createdAt DateTime        @default(now())
+
+  // Relations
+  user      User            @relation(fields: [userId], references: [id])
 }
